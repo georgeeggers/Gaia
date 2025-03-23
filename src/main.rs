@@ -312,7 +312,7 @@ fn voronoi(width: u32, height: u32, points: u32) -> Buf {
     buffer
 }
 
-fn linear_interpolate(x1: u32, y1: u32, x2: u32, y2: u32, x: u32) -> f32 {
+fn linear_interpolate(x1: f32, y1: f32, x2: f32, y2: f32, x: f32) -> f32 {
     // prevent divide by zero errors
     if x1 == x2 {
         return y1 as f32;
@@ -416,7 +416,7 @@ fn value(width: u32, height: u32, points_wide: u32, points_tall: u32) -> Buf {
         let mut x: u32 = 0;
         for i in 0..points_wide - 1 {
             for k in sub_list[i as usize].0..sub_list[i as usize + 1].0 {
-                let value: u8 = linear_interpolate(sub_list[i as usize].0, sub_list[i as usize].2 as u32, sub_list[i as usize + 1].0, sub_list[i as usize + 1].2 as u32, x) as u8;
+                let value: u8 = linear_interpolate(sub_list[i as usize].0 as f32, sub_list[i as usize].2 as f32, sub_list[i as usize + 1].0 as f32, sub_list[i as usize + 1].2 as f32, x as f32) as u8;
                 let pixel = buffer.get_pixel_mut(x, sub_list[i as usize].1);
                 *pixel = image::Rgb([value as u8, value as u8, value as u8]);
                 x += 1;
@@ -435,7 +435,7 @@ fn value(width: u32, height: u32, points_wide: u32, points_tall: u32) -> Buf {
                 let pixel_1 = buffer.get_pixel(x, lower);
                 let pixel_2 = buffer.get_pixel(x, higher);
                 let target_pixel = output.get_pixel_mut(x, y);
-                let value: u8 = linear_interpolate(lower, pixel_1[0] as u32, higher, pixel_2[0] as u32, y) as u8;
+                let value: u8 = linear_interpolate(lower as f32, pixel_1[0] as f32, higher as f32, pixel_2[0] as f32, y as f32) as u8;
                 *target_pixel = image::Rgb([value, value, value])
             }
         }
@@ -520,6 +520,40 @@ fn fractal_value(width: u32, height: u32, mut points_wide: u32, mut points_tall:
     buffer
 }
 
+fn interpolate_smoothing(input: &mut Buf, lower: u8, higher: u8){
+    let mut dim: u8 = 255;
+    let mut bright: u8 = 0;
+    for (_x, _y, pixel) in input.enumerate_pixels() {
+        if pixel[0] < dim {
+            dim = pixel[0];
+        }
+        if pixel[0] > bright {
+            bright = pixel[0];
+        }
+    }
+    let lower_ratio: f32;
+    let higher_ratio: f32;
+
+    if dim == 0 {
+        lower_ratio = lower as f32;
+    } else {
+        lower_ratio = lower as f32 / dim as f32;
+    }
+    if bright == 0 {
+        higher_ratio = higher as f32;
+    } else {
+        higher_ratio = higher as f32 / bright as f32;
+    }
+
+
+    for (_x, _y, pixel) in input.enumerate_pixels_mut() {
+        let color: u8 = (pixel[0] as f32 * linear_interpolate(dim as f32, lower_ratio, bright as f32, higher_ratio, pixel[0] as f32)) as u8;
+        *pixel = image::Rgb([color, color, color]);
+    }
+
+    
+}
+
 // TODO: Add Voronoi Noise [X]
 // TODO: Fix Voronoi Noise (make it work better) [X] - added a normalization function which should handle it for the most part
 // TODO: Add Value Noise [X]
@@ -528,8 +562,8 @@ fn fractal_value(width: u32, height: u32, mut points_wide: u32, mut points_tall:
 // TODO: Reimpliment Into Gaia Maybe? [ ]
 
 fn main() {
-    let width: u32 = 16384;
-    let height: u32 = 16384;
+    let width: u32 = 1024;
+    let height: u32 = 1024;
     let name: &str = "final.png";
 
     let water_level: u8 = 64; 
@@ -538,8 +572,11 @@ fn main() {
     let mut data: Buf = fractal_value(width, height, 9, 9, 3, 5);
     // let mut data: Buf = voronoi(width, height, 8);
     data = invert(data);
+    linear_scale_noise(&mut data, 1);
     normalize(&mut data);
+    // interpolate_smoothing(&mut data, 0, 255);
 
+    /* */
     let mut snow: Buf = threshhold(&data, mountain_level, 255, true);
     snow = recolor_proportion(snow, 220.0, 220.0, 220.0);
 
@@ -554,5 +591,7 @@ fn main() {
 
     overlay(&mut water, land);
     overlay(&mut water, snow);
+    
     save(name, &water);
+    
 }
