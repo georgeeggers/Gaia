@@ -1,7 +1,10 @@
 #![allow(dead_code)]
 #![allow(unused_variables)]
+use std::panic::PanicHookInfo;
+
 use image::{ImageBuffer};
-use rand::{self, random};
+use rand::{self, random, Rng, SeedableRng};
+use rand::rngs::StdRng;
 
 type Buf = ImageBuffer<image::Rgb<u8>, Vec<u8>>;
 
@@ -550,8 +553,6 @@ fn interpolate_smoothing(input: &mut Buf, lower: u8, higher: u8){
         let color: u8 = (pixel[0] as f32 * linear_interpolate(dim as f32, lower_ratio, bright as f32, higher_ratio, pixel[0] as f32)) as u8;
         *pixel = image::Rgb([color, color, color]);
     }
-
-    
 }
 
 // TODO: Add Voronoi Noise [X]
@@ -569,14 +570,16 @@ fn main() {
     let water_level: u8 = 64; 
     let mountain_level: u8 = 196;
     
-    let mut data: Buf = fractal_value(width, height, 9, 9, 3, 5);
-    // let mut data: Buf = voronoi(width, height, 8);
-    data = invert(data);
-    linear_scale_noise(&mut data, 1);
-    normalize(&mut data);
-    // interpolate_smoothing(&mut data, 0, 255);
+    // let mut data: Buf = fractal_value(width, height, 9, 9, 3, 5);
+    let mut data: Buf = fractal_value(width, height, 3, 3, 3, 6);
+    // data = invert(data);
+    // linear_scale_noise(&mut data, 1);
+    // normalize(&mut data);
+    interpolate_smoothing(&mut data, 0, 255);
 
-    /* */
+    /* 
+    */
+
     let mut snow: Buf = threshhold(&data, mountain_level, 255, true);
     snow = recolor_proportion(snow, 220.0, 220.0, 220.0);
 
@@ -591,7 +594,7 @@ fn main() {
 
     overlay(&mut water, land);
     overlay(&mut water, snow);
-    
+
     save(name, &water);
     
 }
